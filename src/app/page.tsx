@@ -1,0 +1,118 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import Nav from "@/components/Nav";
+import UsageCard from "@/components/UsageCard";
+import type { UsageSnapshot } from "@/lib/providers/types";
+
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
+
+export default function Dashboard() {
+  const [snaps, setSnaps] = useState<UsageSnapshot[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const load = useCallback(async (force = false) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/usage${force ? "?force=1" : ""}`);
+      if (res.ok) {
+        const data = (await res.json()) as { snapshots: UsageSnapshot[] };
+        setSnaps(data.snapshots);
+        setLastUpdated(new Date());
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(() => load(), AUTO_REFRESH_MS);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const sections = snaps ? groupByProvider(snaps) : [];
+
+  return (
+    <>
+      <Nav />
+      <div className="wrap">
+        <div className="row-between page-title-row">
+          <h1>Usage</h1>
+          <div className="page-title-actions">
+            {lastUpdated && (
+              <span className="muted title-updated">
+                updated {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+            <button
+              className="btn compact"
+              onClick={() => load(true)}
+              disabled={busy}
+            >
+              {busy ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+        </div>
+
+        {snaps === null ? (
+          <p className="muted">Loading…</p>
+        ) : snaps.length === 0 ? (
+          <div className="card">
+            <p style={{ marginTop: 0 }}>No accounts yet.</p>
+            <Link className="btn primary" href="/accounts">
+              Add an account
+            </Link>
+          </div>
+        ) : (
+          <>
+            {sections.map((section) => (
+              <Section
+                key={section.provider}
+                title={providerTitle(section.provider)}
+                items={section.items}
+              />
+            ))}
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function groupByProvider(snaps: UsageSnapshot[]) {
+  const sections: {
+    provider: UsageSnapshot["provider"];
+    items: UsageSnapshot[];
+  }[] = [];
+  for (const snap of snaps) {
+    let section = sections.find((entry) => entry.provider === snap.provider);
+    if (!section) {
+      section = { provider: snap.provider, items: [] };
+      sections.push(section);
+    }
+    section.items.push(snap);
+  }
+  return sections;
+}
+
+function providerTitle(provider: UsageSnapshot["provider"]): string {
+  if (provider === "claude") return "Claude";
+  if (provider === "codex") return "Codex";
+  return provider;
+}
+
+function Section({ title, items }: { title: string; items: UsageSnapshot[] }) {
+  return (
+    <section className="usage-section">
+      <h2>{title}</h2>
+      <div className="grid">
+        {items.map((s) => (
+          <UsageCard key={s.accountId} snap={s} />
+        ))}
+      </div>
+    </section>
+  );
+}

@@ -1,0 +1,22 @@
+node_modules/
+.next/
+out/
+build/
+.npm-cache/
+
+# secrets & data — never commit
+.env
+.env.local
+.claude/
+.claude-code-review/
+.codex/
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+
+# misc
+.DS_Store
+*.log
+next-env.d.ts

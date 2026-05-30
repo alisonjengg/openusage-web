@@ -1,0 +1,18 @@
+services:
+  openusage:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Set these in a .env file next to this compose file, or export them.
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD}
+      APP_SECRET: ${APP_SECRET:?set APP_SECRET}
+      DATABASE_PATH: /data/openusage.db
+      USAGE_CACHE_TTL_SECONDS: ${USAGE_CACHE_TTL_SECONDS:-300}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+    volumes:
+      - openusage-data:/data
+    restart: unless-stopped
+
+volumes:
+  openusage-data:
