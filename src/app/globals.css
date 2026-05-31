@@ -425,11 +425,26 @@ label.field > span {
   margin-bottom: 16px;
 }
 .usage-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
   margin: 0 0 7px;
+}
+.provider-logo {
+  display: block;
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+}
+.openai-logo {
+  color: var(--codex);
+}
+.claude-logo {
+  color: var(--claude);
 }
 @media (max-width: 639px) {
   input,
@@ -553,4 +568,7 @@ label.field > span {
 .compact-banner {
   margin: 8px 0 0;
   padding: 8px 10px;
+}
+.usage-refresh-banner {
+  margin: 8px 0 12px;
 }
