@@ -382,7 +382,7 @@ test("usage display: pace ignores tiny early-period deviations", () => {
       },
       now,
     ),
-    { kind: "on_pace", label: "on pace" },
+    { kind: "buffer", label: "on pace" },
   );
 
   assert.deepEqual(

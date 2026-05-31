@@ -73,7 +73,7 @@ export function usagePace(
     elapsedMs / durationMs < EARLY_PERIOD_FRACTION &&
     window.usedPercent < EARLY_PERIOD_USAGE_TOLERANCE
   ) {
-    return { kind: "on_pace", label: "on pace" };
+    return { kind: "buffer", label: "on pace" };
   }
 
   const expectedLeft = (timeLeftMs / durationMs) * 100;
