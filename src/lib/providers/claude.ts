@@ -47,6 +47,7 @@ async function refresh(secret: ClaudeSecret): Promise<ClaudeSecret> {
 
 async function callUsage(accessToken: string): Promise<Response> {
   return fetch(USAGE_URL, {
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "anthropic-beta": "oauth-2025-04-20",
@@ -58,6 +59,7 @@ async function callUsage(accessToken: string): Promise<Response> {
 
 async function callProfile(accessToken: string): Promise<ClaudeProfile | null> {
   const res = await fetch(PROFILE_URL, {
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "anthropic-beta": "oauth-2025-04-20",

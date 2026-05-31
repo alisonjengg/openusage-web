@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Nav from "@/components/Nav";
 import UsageCard from "@/components/UsageCard";
@@ -35,6 +35,8 @@ function nextRefreshAt(date: Date): Date {
 }
 
 export default function Dashboard() {
+  const busyRef = useRef(false);
+  const requestSeq = useRef(0);
   const [snaps, setSnaps] = useState<UsageSnapshot[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshError, setRefreshError] = useState("");
@@ -42,18 +44,27 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const load = useCallback(async (force = false) => {
+    if (!force && busyRef.current) return;
+    const requestId = requestSeq.current + 1;
+    requestSeq.current = requestId;
+    busyRef.current = true;
     setBusy(true);
     setRefreshError("");
     setRefreshNotice(null);
+
+    const isLatest = () => requestId === requestSeq.current;
     try {
       const res = await fetch("/api/usage", {
         method: force ? "POST" : "GET",
+        cache: "no-store",
       });
+      if (!isLatest()) return;
       if (!res.ok) {
         setRefreshError("Could not refresh usage. Try again.");
         return;
       }
       const data = (await res.json()) as UsageResponse;
+      if (!isLatest()) return;
       setSnaps(data.snapshots);
       setLastUpdated(new Date());
       if (force && data.refresh) {
@@ -76,9 +87,12 @@ export default function Dashboard() {
         }
       }
     } catch {
-      setRefreshError("Could not refresh usage. Try again.");
+      if (isLatest()) setRefreshError("Could not refresh usage. Try again.");
     } finally {
-      setBusy(false);
+      if (isLatest()) {
+        busyRef.current = false;
+        setBusy(false);
+      }
     }
   }, []);
 

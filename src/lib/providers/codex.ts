@@ -70,7 +70,7 @@ async function callUsage(secret: CodexSecret): Promise<Response> {
   };
   const accountId = accountIdFrom(secret);
   if (accountId) headers["chatgpt-account-id"] = accountId;
-  return fetch(USAGE_URL, { headers });
+  return fetch(USAGE_URL, { cache: "no-store", headers });
 }
 
 export const codexProvider: Provider = {

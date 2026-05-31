@@ -786,3 +786,43 @@ test("side-effecting API actions are not GET-only", () => {
   assert.doesNotMatch(codexStart, /export async function GET/);
   assert.match(usage, /export async function POST/);
 });
+
+test("usage refresh responses bypass browser and proxy caches", () => {
+  const route = readFileSync(
+    new URL("../src/app/api/usage/route.ts", import.meta.url),
+    "utf8",
+  );
+  const dashboard = readFileSync(
+    new URL("../src/app/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(route, /force-dynamic/);
+  assert.match(route, /Cache-Control/);
+  assert.match(route, /no-store/);
+  assert.match(dashboard, /cache:\s*"no-store"/);
+});
+
+test("provider usage fetches bypass framework data cache", () => {
+  const claude = readFileSync(
+    new URL("../src/lib/providers/claude.ts", import.meta.url),
+    "utf8",
+  );
+  const codex = readFileSync(
+    new URL("../src/lib/providers/codex.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(claude, /cache:\s*"no-store"/);
+  assert.match(codex, /cache:\s*"no-store"/);
+});
+
+test("dashboard ignores stale usage responses", () => {
+  const dashboard = readFileSync(
+    new URL("../src/app/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(dashboard, /useRef/);
+  assert.match(dashboard, /requestSeq/);
+});
