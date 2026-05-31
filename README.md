@@ -43,7 +43,7 @@ Create `.env.local` (copy from `env.example`):
 APP_PASSWORD=your-dashboard-password
 APP_SECRET=<run: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))">
 DATABASE_PATH=./data/openusage.db
-USAGE_CACHE_TTL_SECONDS=300
+USAGE_CACHE_TTL_SECONDS=60
 TRUST_PROXY=0
 ```
 
@@ -147,7 +147,7 @@ In Coolify's environment variables page, add:
 APP_PASSWORD=replace-with-a-strong-password
 APP_SECRET=replace-with-a-64-character-random-hex-string
 DATABASE_PATH=/data/openusage.db
-USAGE_CACHE_TTL_SECONDS=300
+USAGE_CACHE_TTL_SECONDS=60
 TRUST_PROXY=1
 ```
 

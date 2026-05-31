@@ -71,3 +71,8 @@ export function envFlag(value: string | undefined): boolean {
   if (!value) return false;
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
+
+export function usageCacheTtlSeconds(value: string | undefined): number {
+  const parsed = Number(value ?? "60");
+  return Math.max(60, Number.isFinite(parsed) && parsed > 0 ? parsed : 60);
+}

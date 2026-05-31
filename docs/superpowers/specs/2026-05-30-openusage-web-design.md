@@ -40,7 +40,7 @@ details below.
 | Stack | Next.js (App Router) |
 | App auth | Single shared password → session cookie |
 | Token storage | AES-encrypted in a local SQLite file (key from env) |
-| Refresh | Manual button + background auto-refresh every 5 min (≥180s floor) |
+| Refresh | Manual button (5s force floor) + frontend auto-refresh every 5 min |
 
 ## Architecture
 
@@ -51,7 +51,7 @@ Browser (dashboard + accounts UI)
 Next.js API routes  ── server-side fetch ──►  provider usage endpoints
         │
         ├── encrypted token store (SQLite)
-        └── server-side usage cache (per account, TTL ≥180s)
+        └── server-side usage cache (per account, TTL ≥60s)
 ```
 
 All provider HTTP calls happen **server-side** in Next.js API routes. Tokens are
@@ -188,15 +188,15 @@ expiresAt; Codex: access/refresh/account_id).
 ## Data flow
 
 1. Browser loads dashboard → `GET /api/usage`.
-2. Server loads all accounts; for each, checks the usage cache (TTL ≥180s).
+2. Server loads all accounts; for each, checks the usage cache (TTL ≥60s).
 3. Cache miss → decrypt token → if expired, refresh (and re-encrypt/persist new
    tokens) → call provider endpoint → normalize → cache.
 4. Return `UsageSnapshot[]`; dashboard renders cards grouped by provider, each
    showing per-window bars (used %), remaining %, and reset time (relative +
    absolute).
-5. Auto-refresh: client polls `/api/usage` every 5 min; manual refresh button
-   forces `?force=1` (bypasses cache but still respects the 180s floor per
-   account to avoid 429s).
+5. Auto-refresh: client polls `GET /api/usage` every 5 min; manual refresh
+   uses `POST /api/usage`, bypassing the normal cache TTL but still respecting
+   a 5s per-account force floor to avoid rapid click loops.
 
 ## Error handling
 
@@ -204,8 +204,8 @@ expiresAt; Codex: access/refresh/account_id).
   others still render.
 - Refresh failure (e.g. revoked refresh token) → account marked
   "re-authentication needed".
-- 429 from Claude → show "rate-limited, retry after cache window"; never retry
-  faster than 180s.
+- 429 from Claude → show "rate-limited, retry after cache window"; manual
+  force refreshes are still limited by the 5s per-account floor.
 - Missing/invalid `APP_SECRET` or `APP_PASSWORD` at boot → app refuses to start
   with a clear message.
 
@@ -237,7 +237,7 @@ expiresAt; Codex: access/refresh/account_id).
 | `APP_PASSWORD` | the single login password |
 | `APP_SECRET` | 32-byte key (base64/hex) for token encryption + cookie signing |
 | `DATABASE_PATH` | SQLite file path (default `./data/openusage.db`) |
-| `USAGE_CACHE_TTL_SECONDS` | default 300; floored at 180 |
+| `USAGE_CACHE_TTL_SECONDS` | default 60; floored at 60 |
 
 ## Open considerations (deferred)
 

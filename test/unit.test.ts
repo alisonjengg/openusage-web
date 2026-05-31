@@ -9,6 +9,7 @@ import {
 } from "../src/lib/account-row.ts";
 import {
   setupErrorPayload,
+  usageCacheTtlSeconds,
   validateAppPassword,
   validateAppSecret,
 } from "../src/lib/env-validation.ts";
@@ -102,6 +103,13 @@ test("login errors: setup failure message is shown instead of incorrect password
     "Server setup is incomplete. Set APP_PASSWORD to a non-placeholder value and restart.",
   );
   assert.equal(loginErrorMessage(401, { error: "invalid password" }), "Incorrect password.");
+});
+
+test("env: usage cache ttl defaults to one minute and floors at one minute", () => {
+  assert.equal(usageCacheTtlSeconds(undefined), 60);
+  assert.equal(usageCacheTtlSeconds("30"), 60);
+  assert.equal(usageCacheTtlSeconds("90"), 90);
+  assert.equal(usageCacheTtlSeconds("nope"), 60);
 });
 
 test("request: client key ignores spoofed forwarding headers unless proxy is trusted", () => {
@@ -342,7 +350,7 @@ test("usage cache: forced refresh reports cooldown instead of silent cache hit",
     usageCacheDecision({
       cachedAt: 1_000,
       now: 3_000,
-      ttlMs: 300_000,
+      ttlMs: 60_000,
       force: true,
       floorMs: FORCE_REFRESH_FLOOR_MS,
     }),
@@ -358,7 +366,7 @@ test("usage cache: forced refresh reports cooldown instead of silent cache hit",
     usageCacheDecision({
       cachedAt: 1_000,
       now: 6_000,
-      ttlMs: 300_000,
+      ttlMs: 60_000,
       force: true,
       floorMs: FORCE_REFRESH_FLOOR_MS,
     }),

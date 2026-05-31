@@ -1,6 +1,7 @@
 import "server-only";
 import {
   envFlag,
+  usageCacheTtlSeconds,
   validateAppPassword,
   validateAppSecret,
 } from "./env-validation";
@@ -32,9 +33,6 @@ export const env = {
     return process.env.DATABASE_PATH ?? "./data/openusage.db";
   },
   get cacheTtlSeconds() {
-    return Math.max(
-      180,
-      Number(process.env.USAGE_CACHE_TTL_SECONDS ?? "300") || 300,
-    );
+    return usageCacheTtlSeconds(process.env.USAGE_CACHE_TTL_SECONDS);
   },
 };
