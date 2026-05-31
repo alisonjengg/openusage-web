@@ -8,11 +8,15 @@ import type { UsageSnapshot } from "@/lib/providers/types";
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
-function checkedTimestamp(date: Date): string {
+function timeLabel(date: Date): string {
   return date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function nextRefreshAt(date: Date): Date {
+  return new Date(date.getTime() + AUTO_REFRESH_MS);
 }
 
 export default function Dashboard() {
@@ -51,7 +55,7 @@ export default function Dashboard() {
           <div className="page-title-actions">
             {lastUpdated && (
               <span className="muted title-updated">
-                checked {checkedTimestamp(lastUpdated)}
+                next refresh at {timeLabel(nextRefreshAt(lastUpdated))}
               </span>
             )}
             <button
