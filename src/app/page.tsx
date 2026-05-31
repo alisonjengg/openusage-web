@@ -5,6 +5,7 @@ import Link from "next/link";
 import Nav from "@/components/Nav";
 import UsageCard from "@/components/UsageCard";
 import type { UsageSnapshot } from "@/lib/providers/types";
+import { refreshCooldownLabel } from "@/lib/usage-cache";
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
@@ -63,8 +64,8 @@ export default function Dashboard() {
         ) {
           setRefreshNotice({
             kind: "warn",
-            message: `Using cached data. Live refresh at ${timeLabel(
-              new Date(data.refresh.nextLiveRefreshAt),
+            message: `Using cached data. Live refresh ${refreshCooldownLabel(
+              data.refresh.nextLiveRefreshAt,
             )}.`,
           });
         } else {

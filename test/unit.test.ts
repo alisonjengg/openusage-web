@@ -21,7 +21,11 @@ import {
 } from "../src/lib/request.ts";
 import { createSession, verifySession } from "../src/lib/session.ts";
 import { singleFlight } from "../src/lib/single-flight.ts";
-import { usageCacheDecision } from "../src/lib/usage-cache.ts";
+import {
+  FORCE_REFRESH_FLOOR_MS,
+  refreshCooldownLabel,
+  usageCacheDecision,
+} from "../src/lib/usage-cache.ts";
 import {
   normalizeClaude,
   normalizeCodex,
@@ -337,33 +341,37 @@ test("usage cache: forced refresh reports cooldown instead of silent cache hit",
   assert.deepEqual(
     usageCacheDecision({
       cachedAt: 1_000,
-      now: 31_000,
+      now: 3_000,
       ttlMs: 300_000,
       force: true,
-      floorMs: 180_000,
+      floorMs: FORCE_REFRESH_FLOOR_MS,
     }),
     {
       useCache: true,
-      ageMs: 30_000,
-      minAgeMs: 180_000,
-      nextLiveRefreshAt: 181_000,
+      ageMs: 2_000,
+      minAgeMs: 5_000,
+      nextLiveRefreshAt: 6_000,
     },
   );
 
   assert.deepEqual(
     usageCacheDecision({
       cachedAt: 1_000,
-      now: 181_000,
+      now: 6_000,
       ttlMs: 300_000,
       force: true,
-      floorMs: 180_000,
+      floorMs: FORCE_REFRESH_FLOOR_MS,
     }),
     {
       useCache: false,
-      ageMs: 180_000,
-      minAgeMs: 180_000,
+      ageMs: 5_000,
+      minAgeMs: 5_000,
     },
   );
+});
+
+test("usage cache: short manual refresh cooldown is shown in seconds", () => {
+  assert.equal(refreshCooldownLabel("1970-01-01T00:00:06.000Z", 1_000), "in 5s");
 });
 
 test("claude oauth: rejects pasted state that does not match the PKCE session", () => {

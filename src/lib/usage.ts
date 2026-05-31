@@ -4,7 +4,7 @@ import { listAccountEntries, updateAccountSecret } from "./db";
 import { claudeProvider } from "./providers/claude";
 import { codexProvider } from "./providers/codex";
 import { singleFlight } from "./single-flight";
-import { usageCacheDecision } from "./usage-cache";
+import { FORCE_REFRESH_FLOOR_MS, usageCacheDecision } from "./usage-cache";
 import type { AccountEntry } from "./account-row";
 import type { AccountRecord, Provider, UsageSnapshot } from "./providers/types";
 
@@ -18,9 +18,9 @@ type CacheEntry = { snapshot: UsageSnapshot; at: number };
 const g = globalThis as unknown as { __ouCache?: Map<string, CacheEntry> };
 const cache = (g.__ouCache ??= new Map<string, CacheEntry>());
 
-// Hard floor between live fetches per account, even on a forced refresh, so
-// rapid manual refreshes can't trip provider rate limits (notably Claude's).
-const FLOOR_MS = 180_000;
+// Hard floor between forced live fetches per account, so rapid clicks cannot
+// fan out into provider polling loops.
+const FORCE_FLOOR_MS = FORCE_REFRESH_FLOOR_MS;
 
 export type UsageRefreshMeta = {
   live: number;
@@ -51,7 +51,7 @@ async function fetchOne(
       now: Date.now(),
       ttlMs,
       force,
-      floorMs: FLOOR_MS,
+      floorMs: FORCE_FLOOR_MS,
     });
     if (decision.useCache) {
       return {
