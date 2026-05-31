@@ -243,6 +243,24 @@ label.field > span {
   font-weight: 600;
   font-size: 15px;
 }
+.card-title-stack {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.card-title-stack .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.as-of {
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
 .tag {
   font-size: 11px;
   font-weight: 700;
@@ -421,6 +439,14 @@ label.field > span {
   }
   .reset {
     font-size: 12px;
+  }
+  .card-title-stack {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .as-of {
+    font-size: 10px;
   }
 }
 @media (min-width: 640px) {

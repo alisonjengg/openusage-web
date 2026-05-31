@@ -28,11 +28,31 @@ function absoluteReset(iso: string | null): string {
   return d.toLocaleString();
 }
 
+function asOfTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function asOfTitle(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString();
+}
+
 export default function UsageCard({ snap }: { snap: UsageSnapshot }) {
   return (
     <div className="card usage-card">
       <div className="head">
-        <span className="label">{snap.label}</span>
+        <span className="card-title-stack">
+          <span className="label">{snap.label}</span>
+          <span className="as-of" title={asOfTitle(snap.fetchedAt)}>
+            as of {asOfTime(snap.fetchedAt)}
+          </span>
+        </span>
         <span className={`tag ${snap.provider}`}>
           {snap.provider}
           {snap.planType ? ` · ${snap.planType}` : ""}
