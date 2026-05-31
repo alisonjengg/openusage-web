@@ -40,6 +40,7 @@ import {
   isLoginRateLimited,
   recordLoginFailure,
 } from "../src/lib/rate-limit.ts";
+import { fetchWithTimeout } from "../src/lib/fetch-timeout.ts";
 import {
   isCompleteIdOrder,
   moveItemBefore,
@@ -52,6 +53,12 @@ import {
   usagePace,
 } from "../src/lib/usage-display.ts";
 import { finalizeUsageSnapshot } from "../src/lib/usage-snapshot.ts";
+import { createUsageService } from "../src/lib/usage-service.ts";
+import type {
+  AccountRecord,
+  AccountSecret,
+  Provider,
+} from "../src/lib/providers/types.ts";
 
 function unsignedJwt(payload: Record<string, unknown>): string {
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -399,6 +406,157 @@ test("usage cache: live snapshots are stamped at completion time", () => {
       fetchedAt: "2026-05-31T15:42:05.000Z",
     },
   );
+});
+
+test("usage service: forced refresh throttles recent failed attempts", async () => {
+  const account: AccountRecord = {
+    id: "acct-1",
+    provider: "codex",
+    label: "Work",
+    secret: { accessToken: "a", refreshToken: "r" },
+    sortOrder: 1,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  let calls = 0;
+  let now = 1_000;
+  const provider: Provider = {
+    id: "codex",
+    async fetchUsage() {
+      calls += 1;
+      return {
+        snapshot: {
+          accountId: account.id,
+          provider: "codex",
+          label: account.label,
+          windows: [],
+          fetchedAt: "ignored",
+          error: "HTTP 429",
+        },
+      };
+    },
+  };
+  const service = createUsageService({
+    providers: { codex: provider },
+    listAccountEntries: () => [{ ok: true, account }],
+    updateAccountSecret: () => undefined,
+    cache: new Map(),
+    attempts: new Map(),
+    cacheTtlSeconds: () => 60,
+    now: () => now,
+  });
+
+  const first = await service.getAllUsageResult(true);
+  assert.equal(calls, 1);
+  assert.equal(first.refresh.live, 0);
+  assert.equal(first.refresh.cached, 0);
+  assert.equal(first.snapshots[0].fetchedAt, "1970-01-01T00:00:01.000Z");
+
+  now = 3_000;
+  const second = await service.getAllUsageResult(true);
+  assert.equal(calls, 1);
+  assert.equal(second.refresh.live, 0);
+  assert.equal(second.refresh.cached, 1);
+  assert.equal(second.refresh.nextLiveRefreshAt, "1970-01-01T00:00:06.000Z");
+
+  now = 6_000;
+  await service.getAllUsageResult(true);
+  assert.equal(calls, 2);
+});
+
+test("usage service: persists rotated secret returned with error snapshot", async () => {
+  const account: AccountRecord = {
+    id: "acct-1",
+    provider: "claude",
+    label: "Claude",
+    secret: { accessToken: "old", refreshToken: "old-refresh" },
+    sortOrder: 1,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const rotated: AccountSecret = {
+    accessToken: "new",
+    refreshToken: "new-refresh",
+  };
+  let saved: AccountSecret | null = null;
+  const provider: Provider = {
+    id: "claude",
+    async fetchUsage() {
+      return {
+        snapshot: {
+          accountId: account.id,
+          provider: "claude",
+          label: account.label,
+          windows: [],
+          fetchedAt: "ignored",
+          error: "bad upstream response",
+        },
+        updatedSecret: rotated,
+      };
+    },
+  };
+  const service = createUsageService({
+    providers: { claude: provider },
+    listAccountEntries: () => [{ ok: true, account }],
+    updateAccountSecret: (_id, secret) => {
+      saved = secret;
+    },
+    cache: new Map(),
+    attempts: new Map(),
+    cacheTtlSeconds: () => 60,
+    now: () => 1_000,
+  });
+
+  const result = await service.getAllUsageResult(true);
+
+  assert.deepEqual(saved, rotated);
+  assert.equal(result.snapshots[0].error, "bad upstream response");
+});
+
+test("usage service: unknown providers return an isolated error snapshot", async () => {
+  const account: AccountRecord = {
+    id: "acct-unknown",
+    provider: "missing" as AccountRecord["provider"],
+    label: "Unknown",
+    secret: { accessToken: "a", refreshToken: "r" },
+    sortOrder: 1,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  const service = createUsageService({
+    providers: {},
+    listAccountEntries: () => [{ ok: true, account }],
+    updateAccountSecret: () => undefined,
+    cache: new Map(),
+    attempts: new Map(),
+    cacheTtlSeconds: () => 60,
+    now: () => 1_000,
+  });
+
+  const result = await service.getAllUsageResult();
+
+  assert.equal(result.snapshots[0].fetchedAt, "1970-01-01T00:00:01.000Z");
+  assert.match(result.snapshots[0].error ?? "", /Unknown provider/);
+  assert.equal(result.refresh.errors, 1);
+});
+
+test("fetch timeout: aborts stalled requests", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = ((_input, init) => {
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      });
+    });
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(() => fetchWithTimeout("https://example.test", {}, 1), {
+      name: "AbortError",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("claude oauth: rejects pasted state that does not match the PKCE session", () => {
@@ -834,6 +992,8 @@ test("provider usage fetches bypass framework data cache", () => {
 
   assert.match(claude, /cache:\s*"no-store"/);
   assert.match(codex, /cache:\s*"no-store"/);
+  assert.match(claude, /fetchWithTimeout/);
+  assert.match(codex, /fetchWithTimeout/);
 });
 
 test("dashboard ignores stale usage responses", () => {

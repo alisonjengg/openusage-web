@@ -1,4 +1,5 @@
 import "server-only";
+import { fetchWithTimeout } from "../fetch-timeout";
 import type { AccountRecord, CodexSecret, FetchResult, Provider } from "./types";
 import { normalizeCodex, type CodexUsage } from "./normalize";
 
@@ -8,6 +9,12 @@ const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const USER_AGENT = "codex-cli/1.0";
 
 type RawUsage = CodexUsage;
+type SnapshotBase = {
+  accountId: string;
+  provider: "codex";
+  label: string;
+  fetchedAt: string;
+};
 
 // Decode the middle segment of a JWT without verifying (we only read claims).
 function decodeJwt(token: string): Record<string, unknown> | null {
@@ -40,7 +47,7 @@ function isExpired(token: string): boolean {
 }
 
 async function refresh(secret: CodexSecret): Promise<CodexSecret> {
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetchWithTimeout(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -70,7 +77,22 @@ async function callUsage(secret: CodexSecret): Promise<Response> {
   };
   const accountId = accountIdFrom(secret);
   if (accountId) headers["chatgpt-account-id"] = accountId;
-  return fetch(USAGE_URL, { cache: "no-store", headers });
+  return fetchWithTimeout(USAGE_URL, { cache: "no-store", headers });
+}
+
+function errorResult(
+  base: SnapshotBase,
+  err: unknown,
+  updatedSecret: CodexSecret | undefined,
+): FetchResult {
+  return {
+    snapshot: {
+      ...base,
+      windows: [],
+      error: err instanceof Error ? err.message : "Fetch failed",
+    },
+    updatedSecret,
+  };
 }
 
 export const codexProvider: Provider = {
@@ -102,13 +124,17 @@ export const codexProvider: Provider = {
       }
     }
 
-    let res = await callUsage(secret);
+    let res: Response;
+    try {
+      res = await callUsage(secret);
+    } catch (err) {
+      return errorResult(base, err, updatedSecret);
+    }
 
     if (res.status === 401 || res.status === 403) {
       try {
         secret = await refresh(secret);
         updatedSecret = secret;
-        res = await callUsage(secret);
       } catch {
         return {
           snapshot: {
@@ -120,6 +146,11 @@ export const codexProvider: Provider = {
           updatedSecret,
         };
       }
+      try {
+        res = await callUsage(secret);
+      } catch (err) {
+        return errorResult(base, err, updatedSecret);
+      }
     }
 
     if (!res.ok) {
@@ -129,7 +160,12 @@ export const codexProvider: Provider = {
       };
     }
 
-    const raw = (await res.json()) as RawUsage;
+    let raw: RawUsage;
+    try {
+      raw = (await res.json()) as RawUsage;
+    } catch (err) {
+      return errorResult(base, err, updatedSecret);
+    }
     const credits = raw.credits?.has_credits
       ? {
           hasCredits: true,

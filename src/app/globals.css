@@ -479,6 +479,122 @@ label.field > span {
     display: none;
   }
 }
+@media (min-width: 1024px) {
+  .wrap {
+    max-width: 1200px;
+    padding: 18px 24px 56px;
+  }
+  header.nav {
+    min-height: 42px;
+    padding: 7px 18px;
+  }
+  header.nav .brand {
+    font-size: 16px;
+  }
+  .nav-links {
+    gap: 6px;
+  }
+  .nav-links a,
+  .nav-links button {
+    font-size: 14px;
+    padding: 9px 12px;
+  }
+  .btn {
+    font-size: 15px;
+    padding: 10px 16px;
+  }
+  .btn.compact {
+    min-height: 32px;
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 15px;
+    padding: 12px 14px;
+  }
+  textarea {
+    font-size: 13.5px;
+  }
+  label.field > span {
+    font-size: 14px;
+  }
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    padding: 22px;
+  }
+  .usage-card {
+    padding: 16px;
+  }
+  .usage-card .head {
+    margin-bottom: 13px;
+  }
+  .card .label {
+    font-size: 17px;
+  }
+  .card-title-stack {
+    gap: 10px;
+  }
+  .as-of {
+    font-size: 13px;
+  }
+  .tag {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+  .usage-card .window {
+    margin-bottom: 12px;
+  }
+  .window .row {
+    font-size: 15px;
+    margin-bottom: 7px;
+  }
+  .window-meta {
+    gap: 10px;
+  }
+  .bar {
+    height: 8px;
+  }
+  .reset {
+    font-size: 13px;
+  }
+  .pace-dot {
+    width: 8px;
+    height: 8px;
+  }
+  .banner {
+    font-size: 14px;
+  }
+  .page-title-row {
+    min-height: 36px;
+    margin-bottom: 12px;
+  }
+  .page-title-row h1 {
+    font-size: 22px;
+  }
+  .page-title-actions {
+    gap: 10px;
+  }
+  .title-updated {
+    font-size: 13px;
+  }
+  .usage-section {
+    margin-bottom: 22px;
+  }
+  .usage-section h2 {
+    gap: 8px;
+    font-size: 15px;
+    margin-bottom: 10px;
+  }
+  .provider-logo {
+    width: 16px;
+    height: 16px;
+  }
+}
 .list-item {
   display: flex;
   align-items: center;
@@ -571,4 +687,29 @@ label.field > span {
 }
 .usage-refresh-banner {
   margin: 8px 0 12px;
+}
+@media (min-width: 1024px) {
+  .list-item {
+    gap: 16px;
+    padding: 18px 20px;
+  }
+  .provider-group {
+    padding: 12px;
+  }
+  .provider-group-head {
+    padding: 4px 6px 10px;
+  }
+  .account-item {
+    margin-bottom: 8px;
+    padding: 11px 13px;
+  }
+  .reorder-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+  .inline-input {
+    min-height: 34px;
+    padding: 7px 10px;
+  }
 }

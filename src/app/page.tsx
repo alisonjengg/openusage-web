@@ -14,6 +14,7 @@ type UsageResponse = {
   refresh?: {
     live: number;
     cached: number;
+    errors: number;
     nextLiveRefreshAt: string | null;
   };
 };
@@ -42,6 +43,7 @@ export default function Dashboard() {
   const [refreshError, setRefreshError] = useState("");
   const [refreshNotice, setRefreshNotice] = useState<RefreshNotice | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [nextAutoRefreshAt, setNextAutoRefreshAt] = useState<Date | null>(null);
 
   const load = useCallback(async (force = false) => {
     if (!force && busyRef.current) return;
@@ -53,6 +55,7 @@ export default function Dashboard() {
     setRefreshNotice(null);
 
     const isLatest = () => requestId === requestSeq.current;
+    let completedAt: Date | null = null;
     try {
       const res = await fetch("/api/usage", {
         method: force ? "POST" : "GET",
@@ -60,24 +63,38 @@ export default function Dashboard() {
       });
       if (!isLatest()) return;
       if (!res.ok) {
+        completedAt = new Date();
         setRefreshError("Could not refresh usage. Try again.");
         return;
       }
       const data = (await res.json()) as UsageResponse;
       if (!isLatest()) return;
+      completedAt = new Date();
       setSnaps(data.snapshots);
-      setLastUpdated(new Date());
+      setLastUpdated(completedAt);
       if (force && data.refresh) {
-        if (
-          data.refresh.live === 0 &&
-          data.refresh.cached > 0 &&
-          data.refresh.nextLiveRefreshAt
-        ) {
+        const cooldown = data.refresh.nextLiveRefreshAt
+          ? refreshCooldownLabel(data.refresh.nextLiveRefreshAt)
+          : null;
+        if (data.refresh.cached > 0) {
           setRefreshNotice({
             kind: "warn",
-            message: `Using cached data. Live refresh ${refreshCooldownLabel(
-              data.refresh.nextLiveRefreshAt,
-            )}.`,
+            message:
+              data.refresh.live > 0
+                ? `Some accounts used cached data.${
+                    cooldown ? ` Live refresh ${cooldown}.` : ""
+                  }`
+                : `Using cached data.${
+                    cooldown ? ` Live refresh ${cooldown}.` : ""
+                  }`,
+          });
+        } else if (data.refresh.errors > 0) {
+          setRefreshNotice({
+            kind: "warn",
+            message:
+              data.refresh.live > 0
+                ? "Some accounts failed to refresh. Check account cards."
+                : "Refresh failed. Check account cards.",
           });
         } else {
           setRefreshNotice({
@@ -87,9 +104,13 @@ export default function Dashboard() {
         }
       }
     } catch {
-      if (isLatest()) setRefreshError("Could not refresh usage. Try again.");
+      if (isLatest()) {
+        completedAt = new Date();
+        setRefreshError("Could not refresh usage. Try again.");
+      }
     } finally {
       if (isLatest()) {
+        setNextAutoRefreshAt(nextRefreshAt(completedAt ?? new Date()));
         busyRef.current = false;
         setBusy(false);
       }
@@ -98,9 +119,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     load();
-    const t = setInterval(() => load(), AUTO_REFRESH_MS);
-    return () => clearInterval(t);
   }, [load]);
+
+  useEffect(() => {
+    if (!nextAutoRefreshAt) return;
+    const delay = Math.max(0, nextAutoRefreshAt.getTime() - Date.now());
+    const t = setTimeout(() => load(), delay);
+    return () => clearTimeout(t);
+  }, [load, nextAutoRefreshAt]);
 
   const sections = snaps ? groupByProvider(snaps) : [];
 
@@ -113,7 +139,8 @@ export default function Dashboard() {
           <div className="page-title-actions">
             {lastUpdated && (
               <span className="muted title-updated">
-                next refresh at {timeLabel(nextRefreshAt(lastUpdated))}
+                next refresh at{" "}
+                {timeLabel(nextAutoRefreshAt ?? nextRefreshAt(lastUpdated))}
               </span>
             )}
             <button

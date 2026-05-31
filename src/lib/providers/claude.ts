@@ -1,4 +1,5 @@
 import "server-only";
+import { fetchWithTimeout } from "../fetch-timeout";
 import type { AccountRecord, ClaudeSecret, FetchResult, Provider } from "./types";
 import {
   claudePlanTypeFromProfile,
@@ -19,9 +20,15 @@ type RawUsage = ClaudeUsage & {
     monthly_limit?: number;
   };
 };
+type SnapshotBase = {
+  accountId: string;
+  provider: "claude";
+  label: string;
+  fetchedAt: string;
+};
 
 async function refresh(secret: ClaudeSecret): Promise<ClaudeSecret> {
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetchWithTimeout(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -46,7 +53,7 @@ async function refresh(secret: ClaudeSecret): Promise<ClaudeSecret> {
 }
 
 async function callUsage(accessToken: string): Promise<Response> {
-  return fetch(USAGE_URL, {
+  return fetchWithTimeout(USAGE_URL, {
     cache: "no-store",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -58,7 +65,7 @@ async function callUsage(accessToken: string): Promise<Response> {
 }
 
 async function callProfile(accessToken: string): Promise<ClaudeProfile | null> {
-  const res = await fetch(PROFILE_URL, {
+  const res = await fetchWithTimeout(PROFILE_URL, {
     cache: "no-store",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -66,9 +73,25 @@ async function callProfile(accessToken: string): Promise<ClaudeProfile | null> {
       "User-Agent": USER_AGENT,
       Accept: "application/json",
     },
-  });
+  }).catch(() => null);
+  if (!res) return null;
   if (!res.ok) return null;
   return (await res.json().catch(() => null)) as ClaudeProfile | null;
+}
+
+function errorResult(
+  base: SnapshotBase,
+  err: unknown,
+  updatedSecret: ClaudeSecret | undefined,
+): FetchResult {
+  return {
+    snapshot: {
+      ...base,
+      windows: [],
+      error: err instanceof Error ? err.message : "Fetch failed",
+    },
+    updatedSecret,
+  };
 }
 
 export const claudeProvider: Provider = {
@@ -101,14 +124,18 @@ export const claudeProvider: Provider = {
       }
     }
 
-    let res = await callUsage(secret.accessToken);
+    let res: Response;
+    try {
+      res = await callUsage(secret.accessToken);
+    } catch (err) {
+      return errorResult(base, err, updatedSecret);
+    }
 
     // Reactive refresh on 401.
     if (res.status === 401) {
       try {
         secret = await refresh(secret);
         updatedSecret = secret;
-        res = await callUsage(secret.accessToken);
       } catch {
         return {
           snapshot: {
@@ -119,6 +146,11 @@ export const claudeProvider: Provider = {
           },
           updatedSecret,
         };
+      }
+      try {
+        res = await callUsage(secret.accessToken);
+      } catch (err) {
+        return errorResult(base, err, updatedSecret);
       }
     }
 
@@ -140,10 +172,16 @@ export const claudeProvider: Provider = {
       };
     }
 
-    const [raw, profile] = await Promise.all([
-      res.json() as Promise<RawUsage>,
-      callProfile(secret.accessToken),
-    ]);
+    let raw: RawUsage;
+    let profile: ClaudeProfile | null;
+    try {
+      [raw, profile] = await Promise.all([
+        res.json() as Promise<RawUsage>,
+        callProfile(secret.accessToken),
+      ]);
+    } catch (err) {
+      return errorResult(base, err, updatedSecret);
+    }
     const credits = raw.extra_usage?.is_enabled
       ? {
           hasCredits: true,
