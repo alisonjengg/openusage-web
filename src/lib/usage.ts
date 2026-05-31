@@ -1,9 +1,10 @@
 import "server-only";
 import { env } from "./env";
-import { listAccounts, updateAccountSecret } from "./db";
+import { listAccountEntries, updateAccountSecret } from "./db";
 import { claudeProvider } from "./providers/claude";
 import { codexProvider } from "./providers/codex";
 import { singleFlight } from "./single-flight";
+import type { AccountEntry } from "./account-row";
 import type { AccountRecord, Provider, UsageSnapshot } from "./providers/types";
 
 const providers: Record<string, Provider> = {
@@ -70,11 +71,29 @@ async function fetchLive(
 }
 
 export async function getAllUsage(force = false): Promise<UsageSnapshot[]> {
-  const accounts = listAccounts();
-  return Promise.all(accounts.map((a) => fetchOne(a, force)));
+  const entries = listAccountEntries();
+  return Promise.all(
+    entries.map((entry) =>
+      entry.ok ? fetchOne(entry.account, force) : corruptAccountSnapshot(entry),
+    ),
+  );
 }
 
 export function invalidateCache(accountId?: string): void {
   if (accountId) cache.delete(accountId);
   else cache.clear();
+}
+
+function corruptAccountSnapshot(
+  entry: Extract<AccountEntry, { ok: false }>,
+): UsageSnapshot {
+  return {
+    accountId: entry.summary.id,
+    provider: entry.summary.provider,
+    label: entry.summary.label,
+    windows: [],
+    fetchedAt: new Date().toISOString(),
+    error: `${entry.error} Re-add credentials or check APP_SECRET.`,
+    needsReauth: true,
+  };
 }

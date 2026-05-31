@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 const PKCE_COOKIE = "ou_pkce";
 
-export async function GET(req: Request) {
+export async function POST(req: Request) {
   const { verifier, challenge, state } = createPkce();
   const url = authorizeUrl(challenge, state);
 

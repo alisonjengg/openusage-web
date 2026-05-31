@@ -49,7 +49,9 @@ export async function verifySession(
   password: string,
 ): Promise<boolean> {
   if (!token || !token.includes(".")) return false;
-  const [payload, sig] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const [payload, sig] = parts;
   try {
     const key = await hmacKey(secret, password);
     const ok = await crypto.subtle.verify(

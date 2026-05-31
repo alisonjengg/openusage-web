@@ -25,6 +25,8 @@ export type AccountRecord = {
   updatedAt: number;
 };
 
+export type AccountSummary = Omit<AccountRecord, "secret">;
+
 // Normalized output the dashboard consumes (no tokens).
 export type UsageWindow = {
   key: string; // "5h" | "7d" | "7d_opus" | ...

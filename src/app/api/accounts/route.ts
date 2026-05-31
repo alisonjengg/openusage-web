@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAccount, listAccounts } from "@/lib/db";
+import { createAccount, listAccountSummaries } from "@/lib/db";
 import { parseCredentials } from "@/lib/parse-credentials";
 import { invalidateCache } from "@/lib/usage";
 import type { ProviderId } from "@/lib/providers/types";
@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 // Return accounts WITHOUT secrets — just id/provider/label for the manager UI.
 export async function GET() {
-  const accounts = listAccounts().map((a) => ({
+  const accounts = listAccountSummaries().map((a) => ({
     id: a.id,
     provider: a.provider,
     label: a.label,

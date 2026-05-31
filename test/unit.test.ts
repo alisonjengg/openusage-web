@@ -4,12 +4,21 @@ import { readFileSync } from "node:fs";
 
 import { deriveKey, sealJSON, openJSON, open } from "../src/lib/crypto.ts";
 import {
+  accountEntryFromRow,
+  type StoredAccountRow,
+} from "../src/lib/account-row.ts";
+import {
   setupErrorPayload,
   validateAppPassword,
   validateAppSecret,
 } from "../src/lib/env-validation.ts";
 import { loginErrorMessage } from "../src/lib/login-errors.ts";
-import { clientKey } from "../src/lib/request.ts";
+import { evaluateLoginAttempt } from "../src/lib/login-attempt.ts";
+import {
+  clientKey,
+  requestIsHttps,
+  requestOriginAllowed,
+} from "../src/lib/request.ts";
 import { createSession, verifySession } from "../src/lib/session.ts";
 import { singleFlight } from "../src/lib/single-flight.ts";
 import {
@@ -102,12 +111,192 @@ test("request: client key ignores spoofed forwarding headers unless proxy is tru
   assert.equal(clientKey(req, { trustProxy: true }), "203.0.113.99");
 });
 
+test("request: rejects cross-origin unsafe requests", () => {
+  assert.equal(
+    requestOriginAllowed(
+      new Request("https://openusage.example/api/accounts", {
+        method: "POST",
+        headers: { origin: "https://openusage.example" },
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    requestOriginAllowed(
+      new Request("https://openusage.example/api/accounts", {
+        method: "POST",
+        headers: { origin: "https://evil.example" },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    requestOriginAllowed(
+      new Request("https://internal:3000/api/accounts", {
+        method: "POST",
+        headers: {
+          origin: "https://openusage.example",
+          "x-forwarded-host": "openusage.example",
+          "x-forwarded-proto": "https",
+        },
+      }),
+      { trustProxy: true },
+    ),
+    true,
+  );
+  assert.equal(
+    requestOriginAllowed(
+      new Request("https://internal:3000/api/accounts", {
+        method: "POST",
+        headers: {
+          origin: "https://evil.example",
+          "x-forwarded-host": "evil.example",
+          "x-forwarded-proto": "https",
+        },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    requestOriginAllowed(
+      new Request("https://openusage.example/api/accounts", {
+        method: "GET",
+        headers: { origin: "https://evil.example" },
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    requestOriginAllowed(
+      new Request("https://openusage.example/api/accounts", {
+        method: "POST",
+        headers: { "sec-fetch-site": "cross-site" },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    requestOriginAllowed(
+      new Request("https://openusage.example/api/accounts", {
+        method: "POST",
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    requestOriginAllowed(
+      new Request("https://openusage.example/api/accounts", {
+        method: "POST",
+        headers: { "sec-fetch-site": "same-origin" },
+      }),
+    ),
+    true,
+  );
+});
+
+test("request: forwarded https is detected for secure cookies", () => {
+  assert.equal(
+    requestIsHttps(
+      new Request("http://internal:3000/api/login", {
+        headers: { "x-forwarded-proto": "https" },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    requestIsHttps(
+      new Request("http://internal:3000/api/login", {
+        headers: { "x-forwarded-proto": "https" },
+      }),
+      { trustProxy: true },
+    ),
+    true,
+  );
+});
+
+test("login attempt: rate limit blocks password evaluation", () => {
+  let checks = 0;
+  const matches = () => {
+    checks += 1;
+    return true;
+  };
+
+  assert.equal(
+    evaluateLoginAttempt({
+      password: "correct",
+      passwordConfig: "correct",
+      rateLimited: true,
+      matches,
+    }),
+    "rate_limited",
+  );
+  assert.equal(checks, 0);
+
+  assert.equal(
+    evaluateLoginAttempt({
+      password: "correct",
+      passwordConfig: "correct",
+      rateLimited: false,
+      matches,
+    }),
+    "valid",
+  );
+  assert.equal(checks, 1);
+});
+
 test("session: password rotation invalidates existing cookies", async () => {
   const secret = "a".repeat(32);
   const token = await createSession(secret, "old-password", 60_000);
 
   assert.equal(await verifySession(token, secret, "old-password"), true);
   assert.equal(await verifySession(token, secret, "new-password"), false);
+});
+
+test("session: rejects tokens with extra segments", async () => {
+  const secret = "a".repeat(32);
+  const token = await createSession(secret, "password", 60_000);
+
+  assert.equal(await verifySession(`${token}.extra`, secret, "password"), false);
+});
+
+test("account rows: decrypt failures are isolated per row", () => {
+  const key = deriveKey("a".repeat(32));
+  const sealed = sealJSON({ accessToken: "a", refreshToken: "r" }, key);
+  const base = {
+    provider: "codex",
+    sort_order: 1,
+    created_at: 1,
+    updated_at: 1,
+  };
+  const good = accountEntryFromRow(
+    {
+      ...base,
+      id: "good",
+      label: "good",
+      secret_blob: sealed.blob,
+      iv: sealed.iv,
+    } satisfies StoredAccountRow,
+    key,
+    openJSON,
+  );
+  const bad = accountEntryFromRow(
+    {
+      ...base,
+      id: "bad",
+      label: "bad",
+      secret_blob: Buffer.from("not encrypted"),
+      iv: sealed.iv,
+    } satisfies StoredAccountRow,
+    key,
+    openJSON,
+  );
+
+  assert.equal(good.ok, true);
+  assert.equal(bad.ok, false);
+  if (!bad.ok) {
+    assert.equal(bad.summary.id, "bad");
+    assert.match(bad.error, /decrypt/i);
+  }
 });
 
 test("singleFlight: deduplicates concurrent work for the same key", async () => {
@@ -144,6 +333,10 @@ test("singleFlight: deduplicates concurrent work for the same key", async () => 
 });
 
 test("claude oauth: rejects pasted state that does not match the PKCE session", () => {
+  assert.throws(
+    () => parseClaudeOAuthCode("oauth-code", "expected-state"),
+    /state/i,
+  );
   assert.throws(
     () => parseClaudeOAuthCode("oauth-code#wrong-state", "expected-state"),
     /state/i,
@@ -511,4 +704,35 @@ test("health check is public and declared in Dockerfile", () => {
   assert.match(route, /status:\s*"ok"/);
   assert.match(dockerfile, /HEALTHCHECK/);
   assert.match(dockerfile, /\/api\/health/);
+});
+
+test("security headers include CSP and HSTS", () => {
+  const middleware = readFileSync(
+    new URL("../src/middleware.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(middleware, /Content-Security-Policy/);
+  assert.match(middleware, /Strict-Transport-Security/);
+});
+
+test("side-effecting API actions are not GET-only", () => {
+  const claudeStart = readFileSync(
+    new URL("../src/app/api/oauth/claude/start/route.ts", import.meta.url),
+    "utf8",
+  );
+  const codexStart = readFileSync(
+    new URL("../src/app/api/oauth/codex/start/route.ts", import.meta.url),
+    "utf8",
+  );
+  const usage = readFileSync(
+    new URL("../src/app/api/usage/route.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(claudeStart, /export async function POST/);
+  assert.doesNotMatch(claudeStart, /export async function GET/);
+  assert.match(codexStart, /export async function POST/);
+  assert.doesNotMatch(codexStart, /export async function GET/);
+  assert.match(usage, /export async function POST/);
 });

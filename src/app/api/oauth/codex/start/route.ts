@@ -8,7 +8,7 @@ import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
+export async function POST(req: Request) {
   let device;
   try {
     device = await requestDeviceCode();

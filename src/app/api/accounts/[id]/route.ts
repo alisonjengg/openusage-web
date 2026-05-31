@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   deleteAccount,
-  getAccount,
+  getAccountSummary,
   updateAccountLabel,
   updateAccountSecret,
 } from "@/lib/db";
@@ -14,7 +14,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Ctx) {
   const { id } = await params;
-  const account = getAccount(id);
+  const account = getAccountSummary(id);
   if (!account) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }

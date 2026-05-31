@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
 import { setupErrorPayload } from "@/lib/env-validation";
+import { evaluateLoginAttempt } from "@/lib/login-attempt";
 import {
   clearLoginFailures,
   isLoginRateLimited,
@@ -37,19 +38,28 @@ export async function POST(req: Request) {
   }
 
   const key = clientKey(req, { trustProxy });
-  if (isLoginRateLimited(key)) {
-    return NextResponse.json(
-      { error: "too many login attempts" },
-      { status: 429 },
-    );
-  }
+  const rateLimited = isLoginRateLimited(key);
 
   const { password } = (await req.json().catch(() => ({}))) as {
     password?: string;
   };
-  if (!password || !safeEqual(password, passwordConfig)) {
-    recordLoginFailure(key);
-    return NextResponse.json({ error: "invalid password" }, { status: 401 });
+  const decision = evaluateLoginAttempt({
+    password,
+    passwordConfig,
+    rateLimited,
+    matches: safeEqual,
+  });
+  if (decision !== "valid") {
+    if (decision === "invalid") recordLoginFailure(key);
+    return NextResponse.json(
+      {
+        error:
+          decision === "rate_limited"
+            ? "too many login attempts"
+            : "invalid password",
+      },
+      { status: decision === "rate_limited" ? 429 : 401 },
+    );
   }
   clearLoginFailures(key);
 

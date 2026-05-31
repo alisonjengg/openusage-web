@@ -1,11 +1,42 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { requestOriginAllowed } from "@/lib/request";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 // Public paths that don't require a session.
 const PUBLIC = ["/login", "/api/login", "/api/health"];
 
+function trustProxyEnabled(): boolean {
+  const value = process.env.TRUST_PROXY;
+  return value
+    ? ["1", "true", "yes", "on"].includes(value.trim().toLowerCase())
+    : false;
+}
+
 function withSecurityHeaders(res: NextResponse): NextResponse {
+  const scriptSrc =
+    process.env.NODE_ENV === "production"
+      ? "script-src 'self' 'unsafe-inline'"
+      : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
+
+  res.headers.set(
+    "Content-Security-Policy",
+    [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "img-src 'self' data:",
+      "style-src 'self' 'unsafe-inline'",
+      scriptSrc,
+      "connect-src 'self'",
+    ].join("; "),
+  );
+  res.headers.set(
+    "Strict-Transport-Security",
+    "max-age=31536000; includeSubDomains",
+  );
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("Referrer-Policy", "no-referrer");
@@ -19,6 +50,12 @@ function withSecurityHeaders(res: NextResponse): NextResponse {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  if (!requestOriginAllowed(req, { trustProxy: trustProxyEnabled() })) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: "forbidden" }, { status: 403 }),
+    );
+  }
+
   if (PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     return withSecurityHeaders(NextResponse.next());
   }

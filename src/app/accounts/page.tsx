@@ -212,7 +212,7 @@ export default function AccountsPage() {
   async function startClaudeLogin() {
     setOauthError("");
     setOauthBusy(true);
-    const res = await fetch("/api/oauth/claude/start");
+    const res = await fetch("/api/oauth/claude/start", { method: "POST" });
     setOauthBusy(false);
     if (res.ok) {
       const { url } = (await res.json()) as { url: string };
@@ -247,7 +247,7 @@ export default function AccountsPage() {
   async function startCodexLogin() {
     setCodexError("");
     setCodexBusy(true);
-    const res = await fetch("/api/oauth/codex/start");
+    const res = await fetch("/api/oauth/codex/start", { method: "POST" });
     setCodexBusy(false);
     if (res.ok) {
       const data = (await res.json()) as {

@@ -22,17 +22,25 @@ function nextRefreshAt(date: Date): Date {
 export default function Dashboard() {
   const [snaps, setSnaps] = useState<UsageSnapshot[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const load = useCallback(async (force = false) => {
     setBusy(true);
+    setRefreshError("");
     try {
-      const res = await fetch(`/api/usage${force ? "?force=1" : ""}`);
-      if (res.ok) {
-        const data = (await res.json()) as { snapshots: UsageSnapshot[] };
-        setSnaps(data.snapshots);
-        setLastUpdated(new Date());
+      const res = await fetch("/api/usage", {
+        method: force ? "POST" : "GET",
+      });
+      if (!res.ok) {
+        setRefreshError("Could not refresh usage. Try again.");
+        return;
       }
+      const data = (await res.json()) as { snapshots: UsageSnapshot[] };
+      setSnaps(data.snapshots);
+      setLastUpdated(new Date());
+    } catch {
+      setRefreshError("Could not refresh usage. Try again.");
     } finally {
       setBusy(false);
     }
@@ -67,6 +75,10 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+
+        {refreshError && (
+          <div className="banner error compact-banner">{refreshError}</div>
+        )}
 
         {snaps === null ? (
           <p className="muted">Loading…</p>

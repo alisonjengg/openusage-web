@@ -4,11 +4,18 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { env } from "./env";
+import {
+  accountEntryFromRow,
+  accountSummaryFromRow,
+  type AccountEntry,
+  type StoredAccountRow,
+} from "./account-row";
 import { deriveKey, openJSON, sealJSON } from "./crypto";
 import { isCompleteIdOrder } from "./reorder";
 import type {
   AccountRecord,
   AccountSecret,
+  AccountSummary,
   ProviderId,
 } from "./providers/types";
 
@@ -49,45 +56,32 @@ function ensureAccountOrderColumn(conn: DatabaseSync): void {
   conn.exec("UPDATE accounts SET sort_order = created_at WHERE sort_order IS NULL");
 }
 
-type Row = {
-  id: string;
-  provider: string;
-  label: string;
-  secret_blob: Uint8Array;
-  iv: Uint8Array;
-  sort_order: number;
-  created_at: number;
-  updated_at: number;
-};
-
-function toRecord(row: Row): AccountRecord {
-  const secret = openJSON<AccountSecret>(
-    { blob: Buffer.from(row.secret_blob), iv: Buffer.from(row.iv) },
-    key(),
+export function listAccounts(): AccountRecord[] {
+  return listAccountEntries().flatMap((entry) =>
+    entry.ok ? [entry.account] : [],
   );
-  return {
-    id: row.id,
-    provider: row.provider as ProviderId,
-    label: row.label,
-    secret,
-    sortOrder: row.sort_order,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
 }
 
-export function listAccounts(): AccountRecord[] {
+export function listAccountEntries(): AccountEntry[] {
   const rows = db()
     .prepare("SELECT * FROM accounts ORDER BY sort_order, created_at")
-    .all() as unknown as Row[];
-  return rows.map(toRecord);
+    .all() as unknown as StoredAccountRow[];
+  const encryptionKey = key();
+  return rows.map((row) => accountEntryFromRow(row, encryptionKey, openJSON));
 }
 
-export function getAccount(id: string): AccountRecord | null {
+export function listAccountSummaries(): AccountSummary[] {
+  const rows = db()
+    .prepare("SELECT * FROM accounts ORDER BY sort_order, created_at")
+    .all() as unknown as StoredAccountRow[];
+  return rows.map(accountSummaryFromRow);
+}
+
+export function getAccountSummary(id: string): AccountSummary | null {
   const row = db()
     .prepare("SELECT * FROM accounts WHERE id = ?")
-    .get(id) as unknown as Row | undefined;
-  return row ? toRecord(row) : null;
+    .get(id) as unknown as StoredAccountRow | undefined;
+  return row ? accountSummaryFromRow(row) : null;
 }
 
 export function createAccount(input: {
@@ -127,7 +121,7 @@ export function deleteAccount(id: string): void {
 }
 
 export function reorderAccounts(ids: string[]): void {
-  const existingIds = listAccounts().map((account) => account.id);
+  const existingIds = listAccountSummaries().map((account) => account.id);
   if (!isCompleteIdOrder(ids, existingIds)) {
     throw new Error("invalid account order");
   }
