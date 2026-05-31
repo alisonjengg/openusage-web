@@ -51,6 +51,7 @@ import {
   usageLeftColor,
   usagePace,
 } from "../src/lib/usage-display.ts";
+import { finalizeUsageSnapshot } from "../src/lib/usage-snapshot.ts";
 
 function unsignedJwt(payload: Record<string, unknown>): string {
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -380,6 +381,24 @@ test("usage cache: forced refresh reports cooldown instead of silent cache hit",
 
 test("usage cache: short manual refresh cooldown is shown in seconds", () => {
   assert.equal(refreshCooldownLabel("1970-01-01T00:00:06.000Z", 1_000), "in 5s");
+});
+
+test("usage cache: live snapshots are stamped at completion time", () => {
+  const snapshot = {
+    accountId: "a1",
+    provider: "codex" as const,
+    label: "Work",
+    fetchedAt: "2026-05-31T15:41:00.000Z",
+    windows: [],
+  };
+
+  assert.deepEqual(
+    finalizeUsageSnapshot(snapshot, Date.parse("2026-05-31T15:42:05.000Z")),
+    {
+      ...snapshot,
+      fetchedAt: "2026-05-31T15:42:05.000Z",
+    },
+  );
 });
 
 test("claude oauth: rejects pasted state that does not match the PKCE session", () => {

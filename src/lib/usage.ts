@@ -5,6 +5,7 @@ import { claudeProvider } from "./providers/claude";
 import { codexProvider } from "./providers/codex";
 import { singleFlight } from "./single-flight";
 import { FORCE_REFRESH_FLOOR_MS, usageCacheDecision } from "./usage-cache";
+import { finalizeUsageSnapshot } from "./usage-snapshot";
 import type { AccountEntry } from "./account-row";
 import type { AccountRecord, Provider, UsageSnapshot } from "./providers/types";
 
@@ -90,10 +91,14 @@ async function fetchLive(
   try {
     const { snapshot, updatedSecret } = await provider.fetchUsage(account);
     if (updatedSecret) updateAccountSecret(account.id, updatedSecret);
+    const fetchedAt = Date.now();
+    const finalized = finalizeUsageSnapshot(snapshot, fetchedAt);
     // Cache successful results; let errors retry on next poll (still ≥ TTL apart
     // via the client, but never cache a transient failure for the full window).
-    if (!snapshot.error) cache.set(account.id, { snapshot, at: Date.now() });
-    return snapshot;
+    if (!finalized.error) {
+      cache.set(account.id, { snapshot: finalized, at: fetchedAt });
+    }
+    return finalized;
   } catch (err) {
     return {
       accountId: account.id,
