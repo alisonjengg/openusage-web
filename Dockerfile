@@ -37,4 +37,6 @@ USER nextjs
 EXPOSE 3000
 VOLUME ["/data"]
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["node", "-e", "const port=process.env.PORT||3000; fetch('http://127.0.0.1:'+port+'/api/health').then((r)=>{if(!r.ok)process.exit(1);}).catch(()=>process.exit(1));"]
+
 CMD ["node", "server.js"]

@@ -492,3 +492,23 @@ test("middleware matcher skips Next.js internals", () => {
   assert.equal(re.test("/login"), true);
   assert.equal(re.test("/api/accounts"), true);
 });
+
+test("health check is public and declared in Dockerfile", () => {
+  const middleware = readFileSync(
+    new URL("../src/middleware.ts", import.meta.url),
+    "utf8",
+  );
+  const route = readFileSync(
+    new URL("../src/app/api/health/route.ts", import.meta.url),
+    "utf8",
+  );
+  const dockerfile = readFileSync(
+    new URL("../Dockerfile", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(middleware, /"\/api\/health"/);
+  assert.match(route, /status:\s*"ok"/);
+  assert.match(dockerfile, /HEALTHCHECK/);
+  assert.match(dockerfile, /\/api\/health/);
+});

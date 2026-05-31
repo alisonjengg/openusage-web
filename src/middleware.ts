@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 // Public paths that don't require a session.
-const PUBLIC = ["/login", "/api/login"];
+const PUBLIC = ["/login", "/api/login", "/api/health"];
 
 function withSecurityHeaders(res: NextResponse): NextResponse {
   res.headers.set("X-Content-Type-Options", "nosniff");

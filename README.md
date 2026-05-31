@@ -184,12 +184,41 @@ storage, accounts may disappear after redeploys or container recreation.
 3. Deploy the application.
 4. Open the domain, sign in with `APP_PASSWORD`, then go to **Accounts**.
 
+### 6. Health checks
+
+The Dockerfile includes a container healthcheck that calls:
+
+```txt
+/api/health
+```
+
+The endpoint returns HTTP `200` with:
+
+```json
+{ "status": "ok" }
+```
+
+In most Coolify Dockerfile deployments, you can rely on the Dockerfile
+healthcheck. If you configure health checks in the Coolify UI instead, use:
+
+```txt
+Path: /api/health
+Expected Status Code: 200
+```
+
+Do not protect `/api/health` with login; Coolify must be able to call it before
+the app receives user traffic. The health endpoint does not expose account,
+token, or usage data.
+
 ### Coolify troubleshooting
 
 - **Port already allocated / bind error:** remove host port mappings. Use
   **Port Exposes** = `3000`; leave **Port Mappings** empty.
 - **502 / app not reachable:** confirm **Port Exposes** is `3000` and the build
   pack is **Dockerfile**.
+- **Health status missing or unhealthy:** redeploy after this version and use
+  `/api/health` with expected status `200` if configuring health checks in the
+  Coolify UI.
 - **Login works on HTTP but not HTTPS / cookie issues:** confirm
   `TRUST_PROXY=1`.
 - **Setup message asks to change password:** `APP_PASSWORD` is empty or a
