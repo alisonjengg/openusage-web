@@ -392,6 +392,7 @@ label.field > span {
   gap: 12px;
 }
 .page-title-row {
+  align-items: baseline;
   min-height: 28px;
   margin-bottom: 8px;
 }
@@ -402,7 +403,7 @@ label.field > span {
 }
 .page-title-actions {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   min-width: 0;
 }
