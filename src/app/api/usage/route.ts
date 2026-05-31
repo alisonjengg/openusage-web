@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { getAllUsage } from "@/lib/usage";
+import { getAllUsageResult } from "@/lib/usage";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const snapshots = await getAllUsage(false);
-  return NextResponse.json({ snapshots });
+  return NextResponse.json(await getAllUsageResult(false));
 }
 
 export async function POST() {
-  const snapshots = await getAllUsage(true);
-  return NextResponse.json({ snapshots });
+  return NextResponse.json(await getAllUsageResult(true));
 }

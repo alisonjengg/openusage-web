@@ -21,6 +21,7 @@ import {
 } from "../src/lib/request.ts";
 import { createSession, verifySession } from "../src/lib/session.ts";
 import { singleFlight } from "../src/lib/single-flight.ts";
+import { usageCacheDecision } from "../src/lib/usage-cache.ts";
 import {
   normalizeClaude,
   normalizeCodex,
@@ -330,6 +331,39 @@ test("singleFlight: deduplicates concurrent work for the same key", async () => 
     "third",
   );
   assert.equal(calls, 2);
+});
+
+test("usage cache: forced refresh reports cooldown instead of silent cache hit", () => {
+  assert.deepEqual(
+    usageCacheDecision({
+      cachedAt: 1_000,
+      now: 31_000,
+      ttlMs: 300_000,
+      force: true,
+      floorMs: 180_000,
+    }),
+    {
+      useCache: true,
+      ageMs: 30_000,
+      minAgeMs: 180_000,
+      nextLiveRefreshAt: 181_000,
+    },
+  );
+
+  assert.deepEqual(
+    usageCacheDecision({
+      cachedAt: 1_000,
+      now: 181_000,
+      ttlMs: 300_000,
+      force: true,
+      floorMs: 180_000,
+    }),
+    {
+      useCache: false,
+      ageMs: 180_000,
+      minAgeMs: 180_000,
+    },
+  );
 });
 
 test("claude oauth: rejects pasted state that does not match the PKCE session", () => {

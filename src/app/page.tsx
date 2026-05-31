@@ -8,6 +8,20 @@ import type { UsageSnapshot } from "@/lib/providers/types";
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
+type UsageResponse = {
+  snapshots: UsageSnapshot[];
+  refresh?: {
+    live: number;
+    cached: number;
+    nextLiveRefreshAt: string | null;
+  };
+};
+
+type RefreshNotice = {
+  kind: "info" | "warn";
+  message: string;
+};
+
 function timeLabel(date: Date): string {
   return date.toLocaleTimeString([], {
     hour: "2-digit",
@@ -23,11 +37,13 @@ export default function Dashboard() {
   const [snaps, setSnaps] = useState<UsageSnapshot[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const [refreshNotice, setRefreshNotice] = useState<RefreshNotice | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const load = useCallback(async (force = false) => {
     setBusy(true);
     setRefreshError("");
+    setRefreshNotice(null);
     try {
       const res = await fetch("/api/usage", {
         method: force ? "POST" : "GET",
@@ -36,9 +52,28 @@ export default function Dashboard() {
         setRefreshError("Could not refresh usage. Try again.");
         return;
       }
-      const data = (await res.json()) as { snapshots: UsageSnapshot[] };
+      const data = (await res.json()) as UsageResponse;
       setSnaps(data.snapshots);
       setLastUpdated(new Date());
+      if (force && data.refresh) {
+        if (
+          data.refresh.live === 0 &&
+          data.refresh.cached > 0 &&
+          data.refresh.nextLiveRefreshAt
+        ) {
+          setRefreshNotice({
+            kind: "warn",
+            message: `Using cached data. Live refresh at ${timeLabel(
+              new Date(data.refresh.nextLiveRefreshAt),
+            )}.`,
+          });
+        } else {
+          setRefreshNotice({
+            kind: "info",
+            message: "Usage refreshed.",
+          });
+        }
+      }
     } catch {
       setRefreshError("Could not refresh usage. Try again.");
     } finally {
@@ -78,6 +113,11 @@ export default function Dashboard() {
 
         {refreshError && (
           <div className="banner error compact-banner">{refreshError}</div>
+        )}
+        {refreshNotice && (
+          <div className={`banner ${refreshNotice.kind} compact-banner`}>
+            {refreshNotice.message}
+          </div>
         )}
 
         {snaps === null ? (
