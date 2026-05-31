@@ -8,6 +8,13 @@ import type { UsageSnapshot } from "@/lib/providers/types";
 
 const AUTO_REFRESH_MS = 5 * 60 * 1000;
 
+function refreshTimestamp(date: Date): string {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function Dashboard() {
   const [snaps, setSnaps] = useState<UsageSnapshot[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,7 +51,7 @@ export default function Dashboard() {
           <div className="page-title-actions">
             {lastUpdated && (
               <span className="muted title-updated">
-                updated {lastUpdated.toLocaleTimeString()}
+                refreshed {refreshTimestamp(lastUpdated)}
               </span>
             )}
             <button
