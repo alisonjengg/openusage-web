@@ -369,6 +369,36 @@ test("usage display: pace uses provider window duration and skips unknown resets
   );
 });
 
+test("usage display: pace ignores tiny early-period deviations", () => {
+  const now = Date.parse("2026-05-30T00:02:00Z");
+
+  assert.deepEqual(
+    usagePace(
+      {
+        key: "5h",
+        label: "5-hour",
+        usedPercent: 2.9,
+        resetsAt: "2026-05-30T05:00:00Z",
+      },
+      now,
+    ),
+    { kind: "on_pace", label: "on pace" },
+  );
+
+  assert.deepEqual(
+    usagePace(
+      {
+        key: "5h",
+        label: "5-hour",
+        usedPercent: 3,
+        resetsAt: "2026-05-30T05:00:00Z",
+      },
+      now,
+    ),
+    { kind: "short", label: "7m short" },
+  );
+});
+
 test("reorder: moves an item before another id without mutating input", () => {
   const items = [
     { id: "a", label: "A" },

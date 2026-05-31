@@ -10,6 +10,8 @@ const WINDOW_MS_BY_KEY: Record<string, number> = {
   "7d_opus": 7 * DAY_MS,
   "7d_sonnet": 7 * DAY_MS,
 };
+const EARLY_PERIOD_FRACTION = 0.01;
+const EARLY_PERIOD_USAGE_TOLERANCE = 3;
 
 export type UsagePace = {
   kind: "buffer" | "short" | "on_pace";
@@ -66,6 +68,14 @@ export function usagePace(
   if (Number.isNaN(resetMs)) return null;
 
   const timeLeftMs = Math.min(Math.max(resetMs - nowMs, 0), durationMs);
+  const elapsedMs = durationMs - timeLeftMs;
+  if (
+    elapsedMs / durationMs < EARLY_PERIOD_FRACTION &&
+    window.usedPercent < EARLY_PERIOD_USAGE_TOLERANCE
+  ) {
+    return { kind: "on_pace", label: "on pace" };
+  }
+
   const expectedLeft = (timeLeftMs / durationMs) * 100;
   const actualLeft = remainingPercent(window.usedPercent);
   const diffMs = ((actualLeft - expectedLeft) / 100) * durationMs;
