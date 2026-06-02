@@ -646,6 +646,52 @@ test("normalizeCodex: missing rate_limit -> no windows", () => {
   assert.deepEqual(normalizeCodex({ plan_type: "plus" }), []);
 });
 
+test("normalizeCodex: clamps phantom <=1% on a not-yet-started window to 0", () => {
+  const out = normalizeCodex({
+    plan_type: "team",
+    rate_limit: {
+      primary_window: {
+        used_percent: 1,
+        reset_after_seconds: 18000,
+        limit_window_seconds: 18000,
+      },
+      secondary_window: {
+        used_percent: 6,
+        reset_after_seconds: 559460,
+        limit_window_seconds: 604800,
+      },
+    },
+  });
+  assert.equal(out[0].usedPercent, 0); // 5h window not started, 1% -> 0
+  assert.equal(out[1].usedPercent, 6); // 7d window in progress -> untouched
+});
+
+test("normalizeCodex: keeps real usage on a started window even if <=1%", () => {
+  const out = normalizeCodex({
+    rate_limit: {
+      primary_window: {
+        used_percent: 1,
+        reset_after_seconds: 12000, // below full window -> already started
+        limit_window_seconds: 18000,
+      },
+    },
+  });
+  assert.equal(out[0].usedPercent, 1);
+});
+
+test("normalizeCodex: reports >1% truly even on a not-yet-started window", () => {
+  const out = normalizeCodex({
+    rate_limit: {
+      primary_window: {
+        used_percent: 5,
+        reset_after_seconds: 18000,
+        limit_window_seconds: 18000,
+      },
+    },
+  });
+  assert.equal(out[0].usedPercent, 5);
+});
+
 test("parseCredentials: claude nested claudeAiOauth", () => {
   const secret = parseCredentials(
     "claude",

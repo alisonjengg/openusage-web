@@ -39,6 +39,7 @@ export function normalizeClaude(raw: ClaudeUsage): UsageWindow[] {
 type CodexWindow = {
   used_percent?: number;
   reset_at?: number; // epoch seconds
+  reset_after_seconds?: number;
   limit_window_seconds?: number;
 } | null;
 export type CodexUsage = {
@@ -63,10 +64,18 @@ export function normalizeCodex(raw: CodexUsage): UsageWindow[] {
   for (const def of CODEX_DEFS) {
     const w = rl[def.field];
     if (!w || typeof w.used_percent !== "number") continue;
+    // ChatGPT sometimes reports a phantom <=1% on a window that hasn't started
+    // yet (reset timer still at the full window length, e.g. shared team quota
+    // rounding up). Treat that as unused so a fresh window shows 100% left.
+    const notStarted =
+      typeof w.reset_after_seconds === "number" &&
+      typeof w.limit_window_seconds === "number" &&
+      w.reset_after_seconds === w.limit_window_seconds;
+    const usedPercent = notStarted && w.used_percent <= 1 ? 0 : w.used_percent;
     windows.push({
       key: def.key,
       label: def.label,
-      usedPercent: w.used_percent,
+      usedPercent,
       resetsAt:
         typeof w.reset_at === "number"
           ? new Date(w.reset_at * 1000).toISOString()
