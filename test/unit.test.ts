@@ -646,24 +646,102 @@ test("normalizeCodex: missing rate_limit -> no windows", () => {
   assert.deepEqual(normalizeCodex({ plan_type: "plus" }), []);
 });
 
+test("normalizeCodex: labels monthly windows by provider duration", () => {
+  const out = normalizeCodex({
+    plan_type: "team",
+    rate_limit: {
+      primary_window: {
+        used_percent: 0,
+        reset_at: 1783005512,
+        limit_window_seconds: 2628000,
+      },
+    },
+  });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].key, "monthly");
+  assert.equal(out[0].label, "Monthly");
+  assert.equal(out[0].resetsAt, new Date(1783005512 * 1000).toISOString());
+  assert.equal(out[0].windowSeconds, 2628000);
+});
+
+test("normalizeCodex: falls back to positional labels without provider duration", () => {
+  const out = normalizeCodex({
+    rate_limit: {
+      primary_window: { used_percent: 12 },
+      secondary_window: { used_percent: 34 },
+    },
+  });
+  assert.equal(out[0].key, "5h");
+  assert.equal(out[0].label, "5-hour");
+  assert.equal(out[1].key, "7d");
+  assert.equal(out[1].label, "Weekly");
+});
+
+test("normalizeCodex: labels uncommon provider durations generically", () => {
+  const out = normalizeCodex({
+    rate_limit: {
+      primary_window: {
+        used_percent: 10,
+        limit_window_seconds: 14 * 24 * 60 * 60,
+      },
+      secondary_window: {
+        used_percent: 20,
+        limit_window_seconds: 10 * 24 * 60 * 60,
+      },
+    },
+  });
+  assert.equal(out[0].key, "1209600s");
+  assert.equal(out[0].label, "2-week");
+  assert.equal(out[1].key, "864000s");
+  assert.equal(out[1].label, "10-day");
+});
+
+test("normalizeCodex: labels uncommon hourly and custom provider durations", () => {
+  const hourly = normalizeCodex({
+    rate_limit: {
+      primary_window: {
+        used_percent: 10,
+        limit_window_seconds: 3 * 60 * 60,
+      },
+    },
+  });
+  assert.equal(hourly[0].key, "10800s");
+  assert.equal(hourly[0].label, "3-hour");
+
+  const custom = normalizeCodex({
+    rate_limit: {
+      primary_window: {
+        used_percent: 10,
+        limit_window_seconds: 12345,
+      },
+    },
+  });
+  assert.equal(custom[0].key, "12345s");
+  assert.equal(custom[0].label, "Custom");
+});
+
 test("normalizeCodex: clamps phantom <=1% on a not-yet-started window to 0", () => {
   const out = normalizeCodex({
     plan_type: "team",
     rate_limit: {
       primary_window: {
         used_percent: 1,
+        reset_at: 1780388277,
         reset_after_seconds: 18000,
         limit_window_seconds: 18000,
       },
       secondary_window: {
         used_percent: 6,
+        reset_at: 1780929736,
         reset_after_seconds: 559460,
         limit_window_seconds: 604800,
       },
     },
   });
   assert.equal(out[0].usedPercent, 0); // 5h window not started, 1% -> 0
+  assert.equal(out[0].resetsAt, null); // not started -> no reset shown
   assert.equal(out[1].usedPercent, 6); // 7d window in progress -> untouched
+  assert.equal(out[1].resetsAt, new Date(1780929736 * 1000).toISOString());
 });
 
 test("normalizeCodex: keeps real usage on a started window even if <=1%", () => {
@@ -684,12 +762,14 @@ test("normalizeCodex: reports >1% truly even on a not-yet-started window", () =>
     rate_limit: {
       primary_window: {
         used_percent: 5,
+        reset_at: 1780388277,
         reset_after_seconds: 18000,
         limit_window_seconds: 18000,
       },
     },
   });
   assert.equal(out[0].usedPercent, 5);
+  assert.equal(out[0].resetsAt, null); // not started -> no reset shown
 });
 
 test("parseCredentials: claude nested claudeAiOauth", () => {
