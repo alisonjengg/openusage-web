@@ -28,6 +28,13 @@ It's a web counterpart to the macOS app
 > These are internal, undocumented endpoints and may change. If one breaks, the
 > affected account shows an error badge; the others keep working.
 
+> **Codex fresh-window quirk.** ChatGPT occasionally reports a phantom `1%`
+> usage on a window that hasn't started yet (its reset timer still sits at the
+> full window length — e.g. a shared team-plan quota rounding up). When a Codex
+> window is not yet started and reports `<= 1%`, it's clamped to `0%` so an
+> unused window reads 100% left. Any higher usage, or any window that has
+> actually started, is reported as-is.
+
 ## Setup
 
 Requires **Node 24+**. The app currently uses Node's built-in `node:sqlite`,
