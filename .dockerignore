@@ -1,0 +1,14 @@
+node_modules
+.next
+.npm-cache
+.claude
+.claude-code-review
+.codex
+data
+.git
+.env
+.env.*
+npm-debug.log*
+docs
+test
+*.md
